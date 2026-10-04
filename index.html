@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroMetrics — Modern Airline Network & Route Analytics</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+
+<body class="bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased transition-colors duration-150">
+
+  <!-- Minimalist Top Navigation -->
+  <header class="sticky top-0 z-30 bg-white/90 dark:bg-[#0c121e]/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+      
+      <!-- Brand & Active Dataset -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+          </svg>
+          <span class="font-bold text-base tracking-tight text-slate-900 dark:text-white">AeroMetrics</span>
+        </div>
+
+        <div class="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-slate-800">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span id="activeDatasetName" class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate max-w-[240px]">
+            Pacific Airlines Network
+          </span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2.5">
+        <button id="openUploadModalBtn" class="px-3 py-1.5 rounded-md bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span>Add CSV</span>
+        </button>
+
+        <button id="themeToggleBtn" title="Toggle Theme" class="p-1.5 rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Clean Segmented View Tabs -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 dark:border-slate-800/60 py-1.5 flex items-center justify-between overflow-x-auto">
+      <nav class="flex items-center gap-1">
+        <button data-tab="overview" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm transition-colors">
+          Overview
+        </button>
+        <button data-tab="city" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          City Explorer
+        </button>
+        <button data-tab="map" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          Route Map
+        </button>
+        <button data-tab="studio" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          Chart Studio
+        </button>
+        <button data-tab="table" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          Data Table
+        </button>
+        <button data-tab="storage" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          Datasets & Guide
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Filter & Search Bar -->
+  <section class="border-b border-slate-200 dark:border-slate-800/80 bg-white/50 dark:bg-[#0c121e]/50 py-2.5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
+      
+      <div class="flex flex-wrap items-center gap-2 flex-1">
+        <!-- Live Search -->
+        <div class="relative min-w-[220px]">
+          <input id="globalSearchInput" type="text" placeholder="Search routes, airports, cities..." class="w-full pl-8 pr-3 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"/>
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+
+        <!-- Origin Select -->
+        <select id="filterOrigin" class="px-2.5 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-sky-500">
+          <option value="">All Origins</option>
+        </select>
+
+        <!-- Destination Select -->
+        <select id="filterDest" class="px-2.5 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-sky-500">
+          <option value="">All Destinations</option>
+        </select>
+
+        <!-- Haul Select -->
+        <select id="filterHaul" class="px-2.5 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-sky-500">
+          <option value="">All Distances</option>
+          <option value="Short Haul">Short Haul (&lt;600 mi)</option>
+          <option value="Medium Haul">Medium Haul (600–2k mi)</option>
+          <option value="Long Haul">Long Haul (2k–5k mi)</option>
+          <option value="Ultra Long Haul">Ultra Long (&gt;5k mi)</option>
+        </select>
+
+        <!-- Reset Button -->
+        <button id="resetFiltersBtn" style="display: none;" class="text-xs font-medium text-sky-600 dark:text-sky-400 hover:underline px-1.5">
+          Clear filters
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Key Metrics Row (4 Clean Cards) -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-2">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+      
+      <!-- Card 1: Total Routes -->
+      <div class="metric-card p-4 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 block">Total Active Routes</span>
+        <div id="kpiTotalRoutes" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</div>
+        <span class="text-[11px] text-slate-400 mt-0.5 block">Market connections</span>
+      </div>
+
+      <!-- Card 2: Total PAX -->
+      <div class="metric-card p-4 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 block">Total Annual Passenger Volume</span>
+        <div id="kpiTotalPax" class="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-1">0</div>
+        <span id="kpiTotalPaxSub" class="text-[11px] text-slate-400 mt-0.5 block">0 passengers</span>
+      </div>
+
+      <!-- Card 3: Average Fare -->
+      <div class="metric-card p-4 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 block">Average Ticket Fare</span>
+        <div id="kpiAvgFare" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">$0</div>
+        <span class="text-[11px] text-slate-400 mt-0.5 block">System-wide mean</span>
+      </div>
+
+      <!-- Card 4: Total Revenue -->
+      <div class="metric-card p-4 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 block">Estimated Annual Revenue</span>
+        <div id="kpiTotalRevenue" class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">$0</div>
+        <span id="kpiTotalRevenueSub" class="text-[11px] text-slate-400 mt-0.5 block">$0</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Main Content Area -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 w-full">
+    
+    <!-- VIEW 1: OVERVIEW DASHBOARD -->
+    <div id="view-overview" class="view-pane space-y-4">
+      
+      <!-- Top Corridors & Revenue Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Busiest Routes by PAX -->
+        <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Busiest Passenger Corridors</h3>
+              <p class="text-xs text-slate-500">Ranked by annual passenger traffic (PAX)</p>
+            </div>
+            <span class="text-[11px] font-medium text-slate-400">Top 10</span>
+          </div>
+          <div class="relative flex-1 min-h-[320px]">
+            <canvas id="topPaxChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Revenue Routes -->
+        <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Highest Revenue Generating Routes</h3>
+              <p class="text-xs text-slate-500">Estimated route revenue (Volume × Average Fare)</p>
+            </div>
+            <span class="text-[11px] font-medium text-slate-400">Top 10</span>
+          </div>
+          <div class="relative flex-1 min-h-[320px]">
+            <canvas id="topRevenueChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Distance vs Fare & Haul Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        
+        <!-- Scatter Plot (2 cols) -->
+        <div class="lg:col-span-2 p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="mb-3">
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Distance vs. Ticket Fare Analysis</h3>
+            <p class="text-xs text-slate-500">Pricing curve regression with bubble size scaled by passenger demand</p>
+          </div>
+          <div class="relative flex-1 min-h-[300px]">
+            <canvas id="scatterPlot"></canvas>
+          </div>
+        </div>
+
+        <!-- Haul Distribution (1 col) -->
+        <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="mb-3">
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Haul Distribution</h3>
+            <p class="text-xs text-slate-500">Sector length breakdown</p>
+          </div>
+          <div class="relative flex-1 min-h-[300px] flex items-center justify-center">
+            <canvas id="haulChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- VIEW 2: UNIFIED CITY & HUB EXPLORER -->
+    <div id="view-city" class="view-pane hidden space-y-4">
+      
+      <!-- Unified City Hero & Command Center -->
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        
+        <!-- Header & Dropdown Row -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
+          <div class="flex items-center gap-3">
+            <span id="cityHeroCode" class="text-2xl font-bold font-mono text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2.5 py-1 rounded-lg border border-sky-200 dark:border-sky-900/50">DEL</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 id="cityHeroCity" class="text-lg font-bold text-slate-900 dark:text-white">Delhi</h3>
+                <span id="cityHeroBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  0 Connected Destinations
+                </span>
+              </div>
+              <p id="cityHeroSubtitle" class="text-xs text-slate-500 mt-0.5">Indira Gandhi International Airport • India</p>
+            </div>
+          </div>
+
+          <!-- Selector & Quick Hubs -->
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div id="quickHubs" class="flex flex-wrap items-center gap-1"></div>
+            <select id="citySelect" class="px-3 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 min-w-[220px]">
+              <option value="">Choose airport / city...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Integrated 4 Metric Strip -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Total Passenger Flow</span>
+            <span id="cityStatPax" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">0</span>
+            <span id="cityStatPaxSub" class="text-[10px] text-slate-400 block">0 passengers</span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Estimated City Revenue</span>
+            <span id="cityStatRevenue" class="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block">$0</span>
+            <span id="cityStatRevenueSub" class="text-[10px] text-slate-400 block">$0</span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Average Ticket Fare</span>
+            <span id="cityStatAvgFare" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">$0</span>
+            <span class="text-[10px] text-slate-400 block">Market weighted</span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Avg Stage Distance</span>
+            <span id="cityStatAvgDist" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">0 mi</span>
+            <span id="cityStatAvgRpm" class="text-[10px] text-slate-400 block font-mono">$0.00/mi yield</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Connected Destination Markets Directory (Full Width Table) -->
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col space-y-3">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h4 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Connected Destination Markets</h4>
+            <p class="text-[11px] text-slate-400">Click column headers to sort by passenger volume, average fare, distance, or revenue</p>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <input id="cityTableSearch" type="text" placeholder="Search destination or country..." class="px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 w-44 sm:w-56"/>
+            <span id="cityMarketCountInfo" class="text-[11px] text-slate-400 whitespace-nowrap">0 destinations</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 flex-1">
+          <table id="cityRoutesTable" class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 dark:bg-slate-900/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="destination">Destination <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="country">Country <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="pax">Annual PAX <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="avgFare">Avg Fare <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="distance">Distance <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="totalRevenue">Est. Revenue <span class="sort-icon ml-0.5">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="cityRoutesTableBody"></tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- VIEW 3: INTERACTIVE ROUTE MAP -->
+    <div id="view-map" class="view-pane hidden space-y-4">
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        
+        <!-- Header & Top Stats Badge -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+          <div>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Global Flight Route Network Map</h3>
+            <p class="text-xs text-slate-500">Interactive curved flight corridors with country & hub filtering.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="mapRoutesCountBadge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-900/50">
+              Showing 0 routes
+            </span>
+            <button id="mapResetFiltersBtn" class="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              Reset Map
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Controls Bar -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Filter by Country</label>
+            <select id="mapCountryFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="all">All Countries</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Focus Hub / Airport</label>
+            <select id="mapHubFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="all">All Airport Hubs</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Display Density</label>
+            <select id="mapDensityLimit" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="50">Top 50 Major Corridors</option>
+              <option value="100">Top 100 Corridors</option>
+              <option value="250">Top 250 Corridors</option>
+              <option value="all">Show All Filtered Routes</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Distance Category</label>
+            <select id="mapHaulFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="all">All Stage Distances</option>
+              <option value="Short Haul">Short Haul (&lt; 600 mi)</option>
+              <option value="Medium Haul">Medium Haul (600 – 2,000 mi)</option>
+              <option value="Long Haul">Long Haul (2,000 – 5,000 mi)</option>
+              <option value="Ultra Long Haul">Ultra Long Haul (&gt; 5,000 mi)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="routeMap" class="w-full h-[620px] rounded-lg border border-slate-200 dark:border-slate-800"></div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: CUSTOM CHART STUDIO -->
+    <div id="view-studio" class="view-pane hidden space-y-4">
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div>
+          <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Custom Chart Studio</h3>
+          <p class="text-xs text-slate-500">Build custom graphs by choosing what to compare, what to measure, and your preferred chart style.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 p-3.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Group By (X-Axis)</label>
+            <select id="studioXAxis" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+              <option value="origin">Departure Airport / City</option>
+              <option value="destination">Arrival Airport / City</option>
+              <option value="destCountry">Destination Country</option>
+              <option value="haulType">Distance Category (Short / Med / Long)</option>
+              <option value="fareTier">Ticket Price Range</option>
+              <option value="route">City Pair Route</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Measure (Y-Axis)</label>
+            <select id="studioYAxis" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+              <option value="pax">Total Passengers (PAX)</option>
+              <option value="totalRevenue">Total Revenue ($)</option>
+              <option value="avgFare">Average Ticket Price ($)</option>
+              <option value="distance">Flight Distance (Miles)</option>
+              <option value="rpm">Revenue per Mile ($/mi RPM)</option>
+              <option value="dailyPax">Daily Passengers</option>
+              <option value="count">Number of Routes</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">How to Calculate</label>
+            <select id="studioAgg" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+              <option value="sum">Total (Sum)</option>
+              <option value="avg">Average (Mean)</option>
+              <option value="max">Highest Value (Max)</option>
+              <option value="min">Lowest Value (Min)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Chart Style</label>
+            <select id="studioChartType" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+              <option value="bar">Vertical Bar Chart</option>
+              <option value="horizontalBar">Horizontal Bar Chart</option>
+              <option value="line">Line Trend Chart</option>
+              <option value="doughnut">Donut Chart</option>
+              <option value="pie">Pie Chart</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Show</label>
+            <select id="studioTopN" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+              <option value="10">Top 10</option>
+              <option value="15" selected>Top 15</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="0">Show All</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="relative w-full h-[480px] p-4 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+          <canvas id="customStudioChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 5: DATA TABLE EXPLORER -->
+    <div id="view-table" class="view-pane hidden space-y-4">
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <input id="tableSearchInput" type="text" placeholder="Filter rows..." class="px-2.5 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 min-w-[200px]"/>
+            <select id="pageSizeSelect" class="px-2 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+              <option value="20" selected>20 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="exportCsvBtn" class="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors">
+              Export CSV
+            </button>
+            <button id="exportJsonBtn" class="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors">
+              Export JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 dark:bg-slate-900/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th class="py-2.5 px-4 text-center w-10">#</th>
+                <th class="py-2.5 px-4" data-sort="origin">Origin <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4" data-sort="destination">Destination <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4 text-right" data-sort="pax">PAX In/Out <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4 text-right" data-sort="avgFare">Avg Fare ($) <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4 text-right" data-sort="distance">Distance (mi) <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4 text-right" data-sort="rpm">RPM ($/mi) <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-4 text-right" data-sort="totalRevenue">Est. Revenue <span class="sort-icon ml-0.5">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="routesTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
+          <span id="tableCountInfo">0 routes</span>
+          <div id="tablePagination" class="flex items-center gap-1.5"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- VIEW 6: DATASETS & USER GUIDE -->
+    <div id="view-storage" class="view-pane hidden space-y-5">
+      
+      <!-- Stored Datasets -->
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Saved Route Datasets</h3>
+            <p class="text-xs text-slate-500">Datasets are stored permanently on your machine in the <code>data/</code> folder and browser storage.</p>
+          </div>
+          <button onclick="window.app.openUploadModal()" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+            + Upload New CSV
+          </button>
+        </div>
+
+        <div id="datasetsList" class="space-y-2.5 pt-2"></div>
+      </div>
+
+      <!-- Quick Guide & Column Specification -->
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div>
+          <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">CSV Format Specification & Local Storage</h3>
+          <p class="text-xs text-slate-500">The parser handles standard CSV formatting, commas within quotes, currency signs, and flexible header aliases.</p>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 font-semibold">
+              <tr>
+                <th class="py-2 px-3">Column</th>
+                <th class="py-2 px-3">Aliases</th>
+                <th class="py-2 px-3">Example</th>
+                <th class="py-2 px-3">Description</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300">
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-sky-600 dark:text-sky-400">ORIGIN</td>
+                <td class="py-2 px-3 text-slate-400">FROM, SRC, DEPARTURE</td>
+                <td class="py-2 px-3 font-mono">GUM</td>
+                <td class="py-2 px-3">3-letter IATA code</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-sky-600 dark:text-sky-400">DESTINATION</td>
+                <td class="py-2 px-3 text-slate-400">TO, DEST, ARRIVAL</td>
+                <td class="py-2 px-3 font-mono">ICN</td>
+                <td class="py-2 px-3">3-letter IATA code</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-sky-600 dark:text-sky-400">PAX IN/OUT</td>
+                <td class="py-2 px-3 text-slate-400">PAX, PASSENGERS, VOLUME</td>
+                <td class="py-2 px-3 font-mono">"712,352"</td>
+                <td class="py-2 px-3">Annual passenger volume</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-sky-600 dark:text-sky-400">AVG. FARE ($)</td>
+                <td class="py-2 px-3 text-slate-400">FARE, PRICE, AVG FARE</td>
+                <td class="py-2 px-3 font-mono">$185.38</td>
+                <td class="py-2 px-3">Average ticket fare</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-3 font-mono font-medium text-sky-600 dark:text-sky-400">DISTANCE (MI)</td>
+                <td class="py-2 px-3 text-slate-400">DIST, MILES</td>
+                <td class="py-2 px-3 font-mono">"2,065 mi"</td>
+                <td class="py-2 px-3">Flight distance in miles</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Upload Modal (High Z-Index above Leaflet Map) -->
+  <div id="uploadModal" style="z-index: 999999;" class="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden">
+    <div class="bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+        <h3 class="font-semibold text-sm text-slate-900 dark:text-white">Upload Route CSV</h3>
+        <button id="closeUploadModalBtn" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg">&times;</button>
+      </div>
+
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Dataset Label (Optional)</label>
+        <input id="customDatasetNameInput" type="text" placeholder="e.g. Q4 Regional Network" class="w-full px-2.5 py-1.5 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-sky-500"/>
+      </div>
+
+      <div id="dropZone" class="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-sky-500 rounded-lg p-6 text-center cursor-pointer bg-slate-50/50 dark:bg-slate-900/30">
+        <p class="text-xs font-medium text-slate-700 dark:text-slate-300">Drag and drop your CSV file here</p>
+        <p class="text-[11px] text-slate-400 mt-0.5">or click to browse from device</p>
+        <input id="csvFileInput" type="file" accept=".csv,text/csv" class="hidden"/>
+        <button onclick="document.getElementById('csvFileInput').click()" type="button" class="mt-2.5 px-3 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50">
+          Browse File
+        </button>
+      </div>
+
+      <p class="text-[11px] text-slate-400">
+        Uploaded files are stored locally in the <code>data/</code> folder so everyone accessing the app can view them.
+      </p>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" style="z-index: 999999;" class="fixed bottom-4 right-4 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Scripts -->
+  <script src="./js/airports-data.js"></script>
+  <script src="./js/default-dataset.js"></script>
+  <script src="./js/csv-parser.js"></script>
+  <script src="./js/storage.js"></script>
+  <script src="./js/charts.js"></script>
+  <script src="./js/map.js"></script>
+  <script src="./js/city-analysis.js"></script>
+  <script src="./js/table.js"></script>
+  <script src="./js/app.js"></script>
+
+</body>
+</html>

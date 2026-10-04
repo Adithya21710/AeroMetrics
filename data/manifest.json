@@ -1,0 +1,79 @@
+[
+  {
+    "id": "pax-indian-subcon-2025-26",
+    "name": "PAX Data 2025-26 — Indian Subcontinent",
+    "filename": "PAX_DATA_2025-26 - Indian Subcon.csv",
+    "path": "./data/PAX_DATA_2025-26 - Indian Subcon.csv",
+    "isDefault": true
+  },
+  {
+    "id": "pax-asia-2025-26",
+    "name": "PAX Data 2025-26 — Asia",
+    "filename": "PAX_DATA_2025-26 - Asia.csv",
+    "path": "./data/PAX_DATA_2025-26 - Asia.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-europe-2025-26",
+    "name": "PAX Data 2025-26 — Europe",
+    "filename": "PAX_DATA_2025-26 - Europe.csv",
+    "path": "./data/PAX_DATA_2025-26 - Europe.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-united-states-2025-26",
+    "name": "PAX Data 2025-26 — United States",
+    "filename": "PAX_DATA_2025-26 - United States.csv",
+    "path": "./data/PAX_DATA_2025-26 - United States.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-middle-east-2025-26",
+    "name": "PAX Data 2025-26 — Middle East",
+    "filename": "PAX_DATA_2025-26 - Middle East.csv",
+    "path": "./data/PAX_DATA_2025-26 - Middle East.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-african-subcon-2025-26",
+    "name": "PAX Data 2025-26 — African Subcontinent",
+    "filename": "PAX_DATA_2025-26 - African Subcon.csv",
+    "path": "./data/PAX_DATA_2025-26 - African Subcon.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-latin-america-2025-26",
+    "name": "PAX Data 2025-26 — Latin America",
+    "filename": "PAX_DATA_2025-26 - Latin America.csv",
+    "path": "./data/PAX_DATA_2025-26 - Latin America.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-canada-2025-26",
+    "name": "PAX Data 2025-26 — Canada",
+    "filename": "PAX_DATA_2025-26 - Canada.csv",
+    "path": "./data/PAX_DATA_2025-26 - Canada.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-oceania-2025-26",
+    "name": "PAX Data 2025-26 — Oceania",
+    "filename": "PAX_DATA_2025-26 - Oceania.csv",
+    "path": "./data/PAX_DATA_2025-26 - Oceania.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pax-s-pacific-islands-2025-26",
+    "name": "PAX Data 2025-26 — S. Pacific Islands",
+    "filename": "PAX_DATA_2025-26 - S. Pacific Islands.csv",
+    "path": "./data/PAX_DATA_2025-26 - S. Pacific Islands.csv",
+    "isDefault": false
+  },
+  {
+    "id": "pacific-routes-2026",
+    "name": "Pacific Airlines Network (Demo Sample)",
+    "filename": "default_airline_routes.csv",
+    "path": "./data/default_airline_routes.csv",
+    "isDefault": false
+  }
+]
