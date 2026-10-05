@@ -21,10 +21,6 @@
     }
   </script>
 
-  <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -38,8 +34,8 @@
   <header class="sticky top-0 z-30 bg-white/90 dark:bg-[#0c121e]/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
       
-      <!-- Brand & Active Dataset -->
-      <div class="flex items-center gap-4">
+      <!-- Brand & Active Dataset Selector -->
+      <div class="flex items-center gap-3">
         <div class="flex items-center gap-2">
           <svg class="w-5 h-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -47,11 +43,18 @@
           <span class="font-bold text-base tracking-tight text-slate-900 dark:text-white">AeroMetrics</span>
         </div>
 
-        <div class="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-slate-800">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span id="activeDatasetName" class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate max-w-[240px]">
-            Pacific Airlines Network
-          </span>
+        <!-- Global Dataset Switcher & Refresh Button -->
+        <div class="flex items-center gap-1.5 pl-3 border-l border-slate-200 dark:border-slate-800">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <select id="globalDatasetSelect" title="Switch Route Dataset" class="text-xs font-semibold rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 py-1.5 px-2.5 focus:outline-none focus:border-sky-500 max-w-[170px] sm:max-w-[320px] cursor-pointer shadow-sm hover:border-sky-500 transition-colors">
+            <option value="">Loading datasets...</option>
+          </select>
+          <button id="refreshDatasetBtn" title="Refresh & Reload Dataset" class="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm group cursor-pointer">
+            <svg id="refreshIcon" class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span class="hidden sm:inline text-xs font-semibold">Refresh</span>
+          </button>
         </div>
       </div>
 
@@ -82,8 +85,8 @@
         <button data-tab="city" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
           City Explorer
         </button>
-        <button data-tab="map" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-          Route Map
+        <button data-tab="country" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+          Country Explorer
         </button>
         <button data-tab="studio" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
           Chart Studio
@@ -253,10 +256,13 @@
           <div class="flex items-center gap-3">
             <span id="cityHeroCode" class="text-2xl font-bold font-mono text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2.5 py-1 rounded-lg border border-sky-200 dark:border-sky-900/50">DEL</span>
             <div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <h3 id="cityHeroCity" class="text-lg font-bold text-slate-900 dark:text-white">Delhi</h3>
                 <span id="cityHeroBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                   0 Connected Destinations
+                </span>
+                <span id="citySheetsBadge" class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  Across Regional Sheets
                 </span>
               </div>
               <p id="cityHeroSubtitle" class="text-xs text-slate-500 mt-0.5">Indira Gandhi International Airport • India</p>
@@ -266,9 +272,20 @@
           <!-- Selector & Quick Hubs -->
           <div class="flex flex-col sm:flex-row sm:items-center gap-2">
             <div id="quickHubs" class="flex flex-wrap items-center gap-1"></div>
-            <select id="citySelect" class="px-3 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 min-w-[220px]">
-              <option value="">Choose airport / city...</option>
+            <select id="cityScopeSelect" title="City Explorer Search Scope" class="px-2.5 py-1.5 text-xs font-semibold rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer shadow-sm">
+              <option value="all" selected>🌐 All Regional Datasets (Combined)</option>
+              <option value="active">📄 Current Dataset Only</option>
             </select>
+            <div class="flex items-center gap-1.5">
+              <select id="citySelect" class="px-3 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 min-w-[200px]">
+                <option value="">Choose airport / city...</option>
+              </select>
+              <button id="cityRefreshBtn" title="Refresh City Data" class="p-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-sky-600 transition-colors cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -311,7 +328,7 @@
           </div>
           
           <div class="flex items-center gap-2">
-            <input id="cityTableSearch" type="text" placeholder="Search destination or country..." class="px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 w-44 sm:w-56"/>
+            <input id="cityTableSearch" type="text" placeholder="Search destination, country, or region..." class="px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 w-44 sm:w-64"/>
             <span id="cityMarketCountInfo" class="text-[11px] text-slate-400 whitespace-nowrap">0 destinations</span>
           </div>
         </div>
@@ -322,6 +339,7 @@
               <tr>
                 <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="destination">Destination <span class="sort-icon ml-0.5">↕</span></th>
                 <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="country">Country <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="region">Region / Sheet <span class="sort-icon ml-0.5">↕</span></th>
                 <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="pax">Annual PAX <span class="sort-icon ml-0.5">↕</span></th>
                 <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="avgFare">Avg Fare <span class="sort-icon ml-0.5">↕</span></th>
                 <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-city-sort="distance">Distance <span class="sort-icon ml-0.5">↕</span></th>
@@ -336,67 +354,156 @@
 
     </div>
 
-    <!-- VIEW 3: INTERACTIVE ROUTE MAP -->
-    <div id="view-map" class="view-pane hidden space-y-4">
+    <!-- VIEW: UNIFIED COUNTRY EXPLORER -->
+    <div id="view-country" class="view-pane hidden space-y-4">
+      
+      <!-- Unified Country Hero & Command Center -->
       <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         
-        <!-- Header & Top Stats Badge -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3">
-          <div>
-            <h3 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Global Flight Route Network Map</h3>
-            <p class="text-xs text-slate-500">Interactive curved flight corridors with country & hub filtering.</p>
+        <!-- Header & Dropdown Row -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
+          <div class="flex items-center gap-3">
+            <span id="countryHeroFlag" class="text-3xl bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700">🇮🇳</span>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 id="countryHeroName" class="text-lg font-bold text-slate-900 dark:text-white">India</h3>
+                <span id="countryHeroRoutesBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  0 Connected Corridors
+                </span>
+                <span id="countrySheetsBadge" class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  Across Regional Sheets
+                </span>
+              </div>
+              <p id="countryHeroSubtitle" class="text-xs text-slate-500 mt-0.5">National Aviation Market Overview</p>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span id="mapRoutesCountBadge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-900/50">
-              Showing 0 routes
-            </span>
-            <button id="mapResetFiltersBtn" class="px-2.5 py-1 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-              Reset Map
-            </button>
+
+          <!-- Selector, Scope Toggle & Quick Countries -->
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div id="quickCountries" class="flex flex-wrap items-center gap-1"></div>
+            <select id="countryScopeSelect" title="Country Explorer Search Scope" class="px-2.5 py-1.5 text-xs font-semibold rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer shadow-sm">
+              <option value="all" selected>🌐 All Regional Datasets (Combined)</option>
+              <option value="active">📄 Current Dataset Only</option>
+            </select>
+            <div class="flex items-center gap-1.5">
+              <select id="countrySelect" class="px-3 py-1.5 text-xs rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 min-w-[200px]">
+                <option value="">Choose country...</option>
+              </select>
+              <button id="countryRefreshBtn" title="Refresh Country Data" class="p-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:border-sky-500 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-sky-600 transition-colors cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Filter Controls Bar -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-          <div>
-            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Filter by Country</label>
-            <select id="mapCountryFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="all">All Countries</option>
-            </select>
+        <!-- Integrated 6 Metric Strip -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Total Passenger Flow</span>
+            <span id="countryStatPax" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">0</span>
+            <span id="countryStatPaxSub" class="text-[10px] text-slate-400 block">0 passengers</span>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Focus Hub / Airport</label>
-            <select id="mapHubFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="all">All Airport Hubs</option>
-            </select>
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Estimated Revenue</span>
+            <span id="countryStatRevenue" class="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block">$0</span>
+            <span id="countryStatRevenueSub" class="text-[10px] text-slate-400 block">$0</span>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Display Density</label>
-            <select id="mapDensityLimit" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="50">Top 50 Major Corridors</option>
-              <option value="100">Top 100 Corridors</option>
-              <option value="250">Top 250 Corridors</option>
-              <option value="all">Show All Filtered Routes</option>
-            </select>
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Average Ticket Fare</span>
+            <span id="countryStatAvgFare" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">$0</span>
+            <span class="text-[10px] text-slate-400 block">Weighted mean</span>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-medium text-slate-600 dark:text-slate-300 mb-1">Distance Category</label>
-            <select id="mapHaulFilter" class="w-full px-2.5 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-sky-500">
-              <option value="all">All Stage Distances</option>
-              <option value="Short Haul">Short Haul (&lt; 600 mi)</option>
-              <option value="Medium Haul">Medium Haul (600 – 2,000 mi)</option>
-              <option value="Long Haul">Long Haul (2,000 – 5,000 mi)</option>
-              <option value="Ultra Long Haul">Ultra Long Haul (&gt; 5,000 mi)</option>
-            </select>
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Avg Stage Distance</span>
+            <span id="countryStatAvgDist" class="text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">0 mi</span>
+            <span id="countryStatAvgRpm" class="text-[10px] text-slate-400 block font-mono">$0.00/mi yield</span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">Domestic Share</span>
+            <span id="countryStatDomestic" class="text-lg font-bold text-sky-600 dark:text-sky-400 mt-0.5 block">0%</span>
+            <span id="countryStatDomesticSub" class="text-[10px] text-slate-400 block">0 domestic PAX</span>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60">
+            <span class="text-xs text-slate-500 block">International Reach</span>
+            <span id="countryStatIntl" class="text-lg font-bold text-purple-600 dark:text-purple-400 mt-0.5 block">0%</span>
+            <span id="countryStatIntlSub" class="text-[10px] text-slate-400 block">0 int'l PAX</span>
           </div>
         </div>
 
-        <!-- Map Container -->
-        <div id="routeMap" class="w-full h-[620px] rounded-lg border border-slate-200 dark:border-slate-800"></div>
       </div>
+
+      <!-- In-Country Hubs & Top Connected Partner Countries Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- Operating Hubs Inside Country -->
+        <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Primary Airports & Operating Hubs</h4>
+              <p class="text-[11px] text-slate-400">Click any airport to inspect in City Explorer</p>
+            </div>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">In-Country</span>
+          </div>
+          <div id="countryHubsList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- Top Connected Partner Countries -->
+        <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-semibold text-sm text-slate-900 dark:text-slate-100">Top Connected Partner Nations</h4>
+              <p class="text-[11px] text-slate-400">Click any country to switch Country Explorer</p>
+            </div>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">International</span>
+          </div>
+          <div id="countryPartnersList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+      </div>
+
+      <!-- Connected Flight Corridors Directory (Full Width Table) -->
+      <div class="p-5 rounded-xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col space-y-3">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h4 class="font-semibold text-sm text-slate-900 dark:text-slate-100">National Flight Corridors & Route Directory</h4>
+            <p class="text-[11px] text-slate-400">Click column headers to sort by origin, partner country, volume, fare, distance, or revenue</p>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <input id="countryTableSearch" type="text" placeholder="Search route, city, partner country, or region..." class="px-2.5 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-500 w-48 sm:w-72"/>
+            <span id="countryRouteCountInfo" class="text-[11px] text-slate-400 whitespace-nowrap">0 corridors</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 flex-1">
+          <table id="countryRoutesTable" class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 dark:bg-slate-900/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="hubCode">National Hub <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="partnerCode">Destination <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="partnerCountry">Partner Country <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="routeType">Type <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="sourceSheet">Region / Sheet <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="pax">Annual PAX <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="avgFare">Avg Fare <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="distance">Distance <span class="sort-icon ml-0.5">↕</span></th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none" data-country-sort="totalRevenue">Est. Revenue <span class="sort-icon ml-0.5">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="countryRoutesTableBody"></tbody>
+          </table>
+        </div>
+
+      </div>
+
     </div>
 
     <!-- VIEW 4: CUSTOM CHART STUDIO -->
@@ -631,12 +738,11 @@
 
   <!-- Scripts -->
   <script src="./js/airports-data.js"></script>
-  <script src="./js/default-dataset.js"></script>
   <script src="./js/csv-parser.js"></script>
   <script src="./js/storage.js"></script>
   <script src="./js/charts.js"></script>
-  <script src="./js/map.js"></script>
   <script src="./js/city-analysis.js"></script>
+  <script src="./js/country-analysis.js"></script>
   <script src="./js/table.js"></script>
   <script src="./js/app.js"></script>
 

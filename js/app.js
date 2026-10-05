@@ -19,53 +19,157 @@ class AirlineAnalyticsApp {
 
   async init() {
     this.setupTheme();
-    await window.datasetStorage.init();
-    this.bindEvents();
+    this.bindEvents(); // Bind buttons/tabs FIRST so everything is immediately clickable
 
-    const datasets = await window.datasetStorage.listDatasets();
-    if (datasets.length === 0) {
-      await this.loadDefaultDataset();
-    } else {
-      const activeId = window.datasetStorage.getActiveDatasetId();
-      let activeDs = await window.datasetStorage.getDataset(activeId);
-      if (!activeDs && datasets.length > 0) {
-        activeDs = await window.datasetStorage.getDataset(datasets[0].id);
-      }
-      if (activeDs) {
-        this.loadDataset(activeDs);
+    try {
+      await window.datasetStorage.init();
+    } catch (e) {
+      console.warn('Storage init fallback:', e);
+    }
+
+    try {
+      await this.populateDatasetSelector();
+      const datasets = await window.datasetStorage.listDatasets();
+      if (datasets.length > 0) {
+        const activeId = window.datasetStorage.getActiveDatasetId();
+        let activeDs = null;
+        if (activeId) {
+          activeDs = await window.datasetStorage.getDataset(activeId);
+        }
+        if (!activeDs && datasets.length > 0) {
+          activeDs = await window.datasetStorage.getDataset(datasets[0].id);
+        }
+        if (activeDs) {
+          this.loadDataset(activeDs);
+        } else {
+          await this.loadDefaultDataset();
+        }
       } else {
         await this.loadDefaultDataset();
       }
+    } catch (err) {
+      console.error('Initialization dataset loading error:', err);
+      await this.loadDefaultDataset();
     }
 
     this.renderDatasetList();
   }
 
-  async loadDefaultDataset() {
-    let csvText = '';
+  async populateDatasetSelector() {
+    const select = document.getElementById('globalDatasetSelect');
+    if (!select) return;
+
     try {
-      const response = await fetch('./data/default_airline_routes.csv');
-      if (response.ok) {
-        csvText = await response.text();
-      }
+      const datasets = await window.datasetStorage.listDatasets();
+      const activeId = window.datasetStorage.getActiveDatasetId();
+
+      select.innerHTML = '';
+      datasets.forEach(ds => {
+        const opt = document.createElement('option');
+        opt.value = ds.id;
+        opt.textContent = ds.name;
+        if (ds.id === activeId) opt.selected = true;
+        select.appendChild(opt);
+      });
+
+      select.onchange = async (e) => {
+        const selectedId = e.target.value;
+        if (!selectedId) return;
+        this.setLoadingState(true);
+        this.showToast('Loading dataset...', 'info');
+
+        try {
+          // Reset origin/dest filters when switching datasets so new continent's routes are not filtered out
+          this.resetFiltersSilent();
+
+          const ds = await window.datasetStorage.getDataset(selectedId);
+          if (ds) {
+            this.loadDataset(ds, true);
+            this.renderDatasetList();
+            this.showToast(`Loaded "${ds.name}" (${ds.rowCount || this.allRoutes.length} routes)`, 'success');
+          }
+        } catch (err) {
+          console.error('Failed to load dataset:', err);
+          this.showToast(`Error: ${err.message}`, 'error');
+        } finally {
+          this.setLoadingState(false);
+        }
+      };
     } catch (e) {
-      // Fallback in local file context
-    }
-
-    if (!csvText && typeof DEFAULT_CSV_DATA !== 'undefined') {
-      csvText = DEFAULT_CSV_DATA;
-    }
-
-    if (csvText) {
-      const dataset = await window.datasetStorage.saveDataset('Pacific Airlines Network (Default)', csvText, true);
-      this.loadDataset(dataset);
+      console.warn('Failed to populate dataset selector:', e);
     }
   }
 
-  loadDataset(dataset) {
+  setLoadingState(isLoading) {
+    const icon = document.getElementById('refreshIcon');
+    const btn = document.getElementById('refreshDatasetBtn');
+    const select = document.getElementById('globalDatasetSelect');
+
+    if (icon) {
+      if (isLoading) {
+        icon.classList.add('animate-spin');
+      } else {
+        icon.classList.remove('animate-spin');
+      }
+    }
+    if (btn) btn.disabled = isLoading;
+    if (select) select.disabled = isLoading;
+  }
+
+  async refreshCurrentDataset() {
+    this.setLoadingState(true);
+    this.showToast('Refreshing dataset...', 'info');
+
+    try {
+      const activeId = window.datasetStorage.getActiveDatasetId();
+      if (activeId) {
+        // Clear memory cache to ensure fresh read
+        window.datasetStorage.cache.delete(activeId);
+        const ds = await window.datasetStorage.getDataset(activeId);
+        if (ds) {
+          this.resetFiltersSilent();
+          this.loadDataset(ds, true);
+          this.renderDatasetList();
+          this.showToast(`Refreshed "${ds.name}" (${this.allRoutes.length} routes)`, 'success');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh dataset:', err);
+      this.showToast(`Refresh failed: ${err.message}`, 'error');
+    } finally {
+      this.setLoadingState(false);
+    }
+  }
+
+  async loadDefaultDataset() {
+    try {
+      const defaultId = 'pax-indian-subcon-2025-26';
+      let ds = await window.datasetStorage.getDataset(defaultId);
+      if (ds) {
+        this.loadDataset(ds, true);
+        return;
+      }
+      const response = await fetch('./data/PAX_DATA_2025-26 - Indian Subcon.csv');
+      if (response.ok) {
+        const csvText = await response.text();
+        const dataset = await window.datasetStorage.saveDataset('PAX Data 2025-26 — Indian Subcontinent', csvText, true, 'PAX_DATA_2025-26 - Indian Subcon.csv');
+        this.loadDataset(dataset, true);
+      }
+    } catch (e) {
+      console.warn('Fallback loading default dataset:', e);
+    }
+  }
+
+  loadDataset(dataset, isDatasetSwitch = false) {
     if (!dataset || !dataset.csvContent) return;
     this.currentDataset = dataset;
     window.datasetStorage.setActiveDatasetId(dataset.id);
+
+    // Sync global dropdown on landing page
+    const globalSelect = document.getElementById('globalDatasetSelect');
+    if (globalSelect && globalSelect.value !== dataset.id) {
+      globalSelect.value = dataset.id;
+    }
 
     try {
       const parseResult = AirlineCSVParser.parse(dataset.csvContent);
@@ -78,7 +182,7 @@ class AirlineAnalyticsApp {
       }
 
       this.populateFilterDropdowns();
-      this.applyFilters();
+      this.applyFilters(isDatasetSwitch);
     } catch (err) {
       console.error('Failed to parse dataset:', err);
       this.showToast(`Error: ${err.message}`, 'error');
@@ -97,24 +201,51 @@ class AirlineAnalyticsApp {
       destinations.add(r.destination);
     });
 
+    // Sort alphabetically by City Name (A to Z)
+    const sortedOrigins = Array.from(origins).map(code => ({
+      code,
+      info: getAirportInfo(code)
+    })).sort((a, b) => (a.info.city || a.code).localeCompare(b.info.city || b.code));
+
+    const sortedDestinations = Array.from(destinations).map(code => ({
+      code,
+      info: getAirportInfo(code)
+    })).sort((a, b) => (a.info.city || a.code).localeCompare(b.info.city || b.code));
+
     if (originSelect) {
-      originSelect.innerHTML = '<option value="">All Origins</option>';
-      Array.from(origins).sort().forEach(code => {
-        const info = getAirportInfo(code);
-        originSelect.innerHTML += `<option value="${code}">${code} (${info.city})</option>`;
+      originSelect.innerHTML = '<option value="">All Origins (A–Z)</option>';
+      sortedOrigins.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.code;
+        opt.textContent = `${item.info.city} (${item.code})`;
+        originSelect.appendChild(opt);
       });
+      if (this.filters.origin && origins.has(this.filters.origin)) {
+        originSelect.value = this.filters.origin;
+      } else {
+        this.filters.origin = '';
+        originSelect.value = '';
+      }
     }
 
     if (destSelect) {
-      destSelect.innerHTML = '<option value="">All Destinations</option>';
-      Array.from(destinations).sort().forEach(code => {
-        const info = getAirportInfo(code);
-        destSelect.innerHTML += `<option value="${code}">${code} (${info.city})</option>`;
+      destSelect.innerHTML = '<option value="">All Destinations (A–Z)</option>';
+      sortedDestinations.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.code;
+        opt.textContent = `${item.info.city} (${item.code})`;
+        destSelect.appendChild(opt);
       });
+      if (this.filters.destination && destinations.has(this.filters.destination)) {
+        destSelect.value = this.filters.destination;
+      } else {
+        this.filters.destination = '';
+        destSelect.value = '';
+      }
     }
   }
 
-  applyFilters() {
+  applyFilters(isDatasetSwitch = false) {
     this.filteredRoutes = this.allRoutes.filter(r => {
       if (this.filters.origin && r.origin !== this.filters.origin) return false;
       if (this.filters.destination && r.destination !== this.filters.destination) return false;
@@ -135,7 +266,7 @@ class AirlineAnalyticsApp {
     });
 
     this.updateKPIs();
-    this.renderActiveViews();
+    this.renderActiveViews(isDatasetSwitch);
   }
 
   updateKPIs() {
@@ -162,19 +293,16 @@ class AirlineAnalyticsApp {
     }
   }
 
-  renderActiveViews() {
+  renderActiveViews(isDatasetSwitch = false) {
     window.dataTableManager.init(this.filteredRoutes);
-    window.cityAnalysisManager.populateCitySelector(this.allRoutes);
+    window.cityAnalysisManager?.populateCitySelector(this.allRoutes, isDatasetSwitch);
+    window.countryAnalysisManager?.populateCountrySelector(this.allRoutes, isDatasetSwitch);
 
     if (this.activeTab === 'overview') {
       window.routeChartsManager.renderTopPaxChart('topPaxChart', this.filteredRoutes, 10);
       window.routeChartsManager.renderTopRevenueChart('topRevenueChart', this.filteredRoutes, 10);
       window.routeChartsManager.renderScatterPlot('scatterPlot', this.filteredRoutes);
       window.routeChartsManager.renderHaulChart('haulChart', this.filteredRoutes);
-    }
-
-    if (this.activeTab === 'map') {
-      window.routeMapManager.setRoutes(this.filteredRoutes);
     }
 
     if (this.activeTab === 'studio') {
@@ -204,15 +332,20 @@ class AirlineAnalyticsApp {
       }
     });
 
-    if (tabId === 'map') {
-      setTimeout(() => {
-        window.routeMapManager.init();
-        window.routeMapManager.setRoutes(this.filteredRoutes);
-      }, 50);
-    }
-
     if (tabId === 'overview') {
       this.renderActiveViews();
+    }
+
+    if (tabId === 'city') {
+      window.cityAnalysisManager?.populateCitySelector(this.allRoutes);
+    }
+
+    if (tabId === 'country') {
+      window.countryAnalysisManager?.populateCountrySelector(this.allRoutes);
+    }
+
+    if (tabId === 'table') {
+      window.dataTableManager.init(this.filteredRoutes);
     }
 
     if (tabId === 'studio') {
@@ -241,7 +374,16 @@ class AirlineAnalyticsApp {
     const select = document.getElementById('citySelect');
     if (select) {
       select.value = code;
-      window.cityAnalysisManager.analyzeCity(code);
+      window.cityAnalysisManager?.analyzeCity(code);
+    }
+  }
+
+  selectCountry(countryName) {
+    this.switchTab('country');
+    const select = document.getElementById('countrySelect');
+    if (select) {
+      select.value = countryName;
+      window.countryAnalysisManager?.analyzeCountry(countryName);
     }
   }
 
@@ -277,9 +419,9 @@ class AirlineAnalyticsApp {
           </p>
         </div>
         <div class="flex items-center gap-2">
-          ${!isActive ? `<button onclick="window.app.switchToDataset('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors">Set Active</button>` : ''}
-          <button onclick="window.app.exportDatasetById('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Export</button>
-          ${!ds.isDefault ? `<button onclick="window.app.deleteDatasetById('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">Delete</button>` : ''}
+          ${!isActive ? `<button onclick="window.app.switchToDataset('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors cursor-pointer">Set Active</button>` : ''}
+          <button onclick="window.app.exportDatasetById('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">Export</button>
+          ${!ds.isDefault ? `<button onclick="window.app.deleteDatasetById('${ds.id}')" class="px-3 py-1.5 text-xs font-medium rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer">Delete</button>` : ''}
         </div>
       `;
 
@@ -288,21 +430,30 @@ class AirlineAnalyticsApp {
   }
 
   async switchToDataset(id) {
-    const ds = await window.datasetStorage.getDataset(id);
-    if (ds) {
-      this.loadDataset(ds);
-      this.renderDatasetList();
-      this.showToast(`Switched to "${ds.name}"`, 'info');
+    this.setLoadingState(true);
+    try {
+      this.resetFiltersSilent();
+      const ds = await window.datasetStorage.getDataset(id);
+      if (ds) {
+        this.loadDataset(ds, true);
+        this.renderDatasetList();
+        this.showToast(`Switched to "${ds.name}"`, 'info');
+      }
+    } catch (e) {
+      console.error('Error switching dataset:', e);
+    } finally {
+      this.setLoadingState(false);
     }
   }
 
   async deleteDatasetById(id) {
     if (confirm('Delete this dataset?')) {
       await window.datasetStorage.deleteDataset(id);
+      await this.populateDatasetSelector();
       const datasets = await window.datasetStorage.listDatasets();
       if (datasets.length > 0) {
         const activeDs = await window.datasetStorage.getDataset(window.datasetStorage.getActiveDatasetId() || datasets[0].id);
-        if (activeDs) this.loadDataset(activeDs);
+        if (activeDs) this.loadDataset(activeDs, true);
       }
       this.renderDatasetList();
       this.showToast('Dataset deleted', 'info');
@@ -326,7 +477,9 @@ class AirlineAnalyticsApp {
       const text = await file.text();
       const name = customName.trim() || file.name.replace(/\.[^/.]+$/, '');
       const dataset = await window.datasetStorage.saveDataset(name, text, false);
-      this.loadDataset(dataset);
+      await this.populateDatasetSelector();
+      this.resetFiltersSilent();
+      this.loadDataset(dataset, true);
       this.renderDatasetList();
       this.showToast(`Uploaded "${name}" (${dataset.rowCount} routes)`, 'success');
       this.closeUploadModal();
@@ -341,6 +494,23 @@ class AirlineAnalyticsApp {
         const tab = btn.getAttribute('data-tab');
         this.switchTab(tab);
       });
+    });
+
+    // Refresh Dataset Button
+    document.getElementById('refreshDatasetBtn')?.addEventListener('click', () => {
+      this.refreshCurrentDataset();
+    });
+
+    // City Refresh Button
+    document.getElementById('cityRefreshBtn')?.addEventListener('click', () => {
+      window.cityAnalysisManager?.populateCitySelector(this.allRoutes);
+      this.showToast('City Explorer data refreshed', 'info');
+    });
+
+    // Country Refresh Button
+    document.getElementById('countryRefreshBtn')?.addEventListener('click', () => {
+      window.countryAnalysisManager?.populateCountrySelector(this.allRoutes);
+      this.showToast('Country Explorer data refreshed', 'info');
     });
 
     document.getElementById('themeToggleBtn')?.addEventListener('click', () => {
@@ -372,32 +542,19 @@ class AirlineAnalyticsApp {
     });
 
     document.getElementById('citySelect')?.addEventListener('change', (e) => {
-      window.cityAnalysisManager.analyzeCity(e.target.value);
+      window.cityAnalysisManager?.analyzeCity(e.target.value);
     });
 
     document.getElementById('cityTableSearch')?.addEventListener('input', (e) => {
-      window.cityAnalysisManager.setSearchQuery(e.target.value);
+      window.cityAnalysisManager?.setSearchQuery(e.target.value);
     });
 
-    // Map Controls
-    document.getElementById('mapCountryFilter')?.addEventListener('change', (e) => {
-      window.routeMapManager.setCountryFilter(e.target.value);
+    document.getElementById('countrySelect')?.addEventListener('change', (e) => {
+      window.countryAnalysisManager?.analyzeCountry(e.target.value);
     });
 
-    document.getElementById('mapHubFilter')?.addEventListener('change', (e) => {
-      window.routeMapManager.setHubFilter(e.target.value);
-    });
-
-    document.getElementById('mapDensityLimit')?.addEventListener('change', (e) => {
-      window.routeMapManager.setDensityLimit(e.target.value);
-    });
-
-    document.getElementById('mapHaulFilter')?.addEventListener('change', (e) => {
-      window.routeMapManager.setHaulFilter(e.target.value);
-    });
-
-    document.getElementById('mapResetFiltersBtn')?.addEventListener('click', () => {
-      window.routeMapManager.resetFilters();
+    document.getElementById('countryTableSearch')?.addEventListener('input', (e) => {
+      window.countryAnalysisManager?.setSearchQuery(e.target.value);
     });
 
     ['studioXAxis', 'studioYAxis', 'studioAgg', 'studioChartType', 'studioTopN'].forEach(id => {
@@ -424,7 +581,14 @@ class AirlineAnalyticsApp {
     document.querySelectorAll('th[data-city-sort]').forEach(th => {
       th.addEventListener('click', () => {
         const col = th.getAttribute('data-city-sort');
-        window.cityAnalysisManager.sortBy(col);
+        window.cityAnalysisManager?.sortBy(col);
+      });
+    });
+
+    document.querySelectorAll('th[data-country-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.getAttribute('data-country-sort');
+        window.countryAnalysisManager?.sortBy(col);
       });
     });
 
@@ -473,12 +637,16 @@ class AirlineAnalyticsApp {
     });
   }
 
-  resetFilters() {
+  resetFiltersSilent() {
     this.filters = { origin: '', destination: '', haulType: '', search: '' };
     ['filterOrigin', 'filterDest', 'filterHaul', 'globalSearchInput'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
+  }
+
+  resetFilters() {
+    this.resetFiltersSilent();
     this.applyFilters();
   }
 
@@ -514,7 +682,6 @@ class AirlineAnalyticsApp {
       document.documentElement.classList.remove('light');
       localStorage.setItem('theme_preference', 'dark');
     }
-    window.routeMapManager.updateTileLayer();
     this.renderActiveViews();
   }
 

@@ -68,12 +68,5 @@
     "filename": "PAX_DATA_2025-26 - S. Pacific Islands.csv",
     "path": "./data/PAX_DATA_2025-26 - S. Pacific Islands.csv",
     "isDefault": false
-  },
-  {
-    "id": "pacific-routes-2026",
-    "name": "Pacific Airlines Network (Demo Sample)",
-    "filename": "default_airline_routes.csv",
-    "path": "./data/default_airline_routes.csv",
-    "isDefault": false
   }
 ]

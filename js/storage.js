@@ -1,7 +1,7 @@
 /**
- * Hybrid Dataset Storage Manager
+ * Hybrid Fast Dataset Storage Manager
  * 1. Disk Mode: Connects to local server (/api/datasets) when run locally.
- * 2. Static / AWS Amplify Mode: Fetches all bundled CSV files from data/manifest.json for all web visitors.
+ * 2. Static / AWS Amplify Mode: Reads metadata from data/manifest.json instantly, loads CSV on demand.
  * 3. Offline Mode: IndexedDB client-side database.
  */
 
@@ -13,12 +13,16 @@ class DatasetStorage {
     this.db = null;
     this.activeDatasetIdKey = 'active_aerometrics_dataset_id';
     this.isServerActive = false;
+    this.cache = new Map();
   }
 
   async init() {
-    // 1. Check if local Python API server is running
+    // 1. Non-blocking check for local server
     try {
-      const res = await fetch('/api/datasets', { method: 'GET' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 800);
+      const res = await fetch('/api/datasets', { method: 'GET', signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         this.isServerActive = true;
       }
@@ -33,29 +37,33 @@ class DatasetStorage {
         return;
       }
 
-      const request = window.indexedDB.open(this.dbName, this.dbVersion);
+      try {
+        const request = window.indexedDB.open(this.dbName, this.dbVersion);
 
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
-          store.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-      };
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+        };
 
-      request.onsuccess = (event) => {
-        this.db = event.target.result;
+        request.onsuccess = (event) => {
+          this.db = event.target.result;
+          resolve(this);
+        };
+
+        request.onerror = () => {
+          resolve(this);
+        };
+      } catch (err) {
         resolve(this);
-      };
-
-      request.onerror = () => {
-        resolve(this);
-      };
+      }
     });
   }
 
   /**
-   * List all datasets from server disk, static manifest (AWS Amplify), and local IndexedDB
+   * Fast metadata listing (does NOT block or download all CSV files simultaneously)
    */
   async listDatasets() {
     const map = new Map();
@@ -66,38 +74,34 @@ class DatasetStorage {
         const res = await fetch('/api/datasets');
         if (res.ok) {
           const serverDatasets = await res.json();
-          serverDatasets.forEach(d => map.set(d.id, d));
+          serverDatasets.forEach(d => {
+            map.set(d.id, d);
+            if (d.csvContent) this.cache.set(d.id, d);
+          });
         }
       } catch (e) {
         console.warn('Could not fetch server datasets:', e);
       }
     } else {
-      // 2. AWS Amplify / Static Hosting mode (fetch bundled CSVs from manifest.json)
+      // 2. AWS Amplify / Static Hosting mode (fetch manifest.json metadata instantly)
       try {
         const res = await fetch('./data/manifest.json');
         if (res.ok) {
           const manifest = await res.json();
-          for (const item of manifest) {
-            try {
-              const fileRes = await fetch(encodeURI(item.path));
-              if (fileRes.ok) {
-                const csvContent = await fileRes.text();
-                const parseRes = AirlineCSVParser.parse(csvContent);
-                map.set(item.id, {
-                  id: item.id,
-                  filename: item.filename,
-                  name: item.name,
-                  csvContent: csvContent,
-                  rowCount: parseRes.routes.length,
-                  createdAt: new Date().toISOString(),
-                  isDefault: !!item.isDefault,
-                  source: 'hosted'
-                });
-              }
-            } catch (err) {
-              console.warn(`Could not load manifest item: ${item.filename}`);
-            }
-          }
+          manifest.forEach(item => {
+            const cached = this.cache.get(item.id);
+            map.set(item.id, {
+              id: item.id,
+              filename: item.filename,
+              name: item.name,
+              path: item.path,
+              csvContent: cached ? cached.csvContent : null,
+              rowCount: cached ? cached.rowCount : 0,
+              createdAt: item.createdAt || new Date().toISOString(),
+              isDefault: !!item.isDefault,
+              source: 'hosted'
+            });
+          });
         }
       } catch (e) {
         // Fallback if manifest is not present
@@ -105,25 +109,134 @@ class DatasetStorage {
     }
 
     // 3. User's local browser storage (IndexedDB)
-    const localDatasets = await this.listFromLocalDB();
-    localDatasets.forEach(d => {
-      if (!map.has(d.id)) {
-        map.set(d.id, d);
-      }
-    });
+    try {
+      const localDatasets = await this.listFromLocalDB();
+      localDatasets.forEach(d => {
+        if (!map.has(d.id)) {
+          map.set(d.id, d);
+        }
+        if (d.csvContent) this.cache.set(d.id, d);
+      });
+    } catch (e) {
+      console.warn('IndexedDB read fallback:', e);
+    }
 
     const combined = Array.from(map.values());
-    combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const getCleanName = (name) => (name || '').replace(/^PAX Data 2025-26\s*—\s*/i, '').trim();
+    combined.sort((a, b) => getCleanName(a.name).localeCompare(getCleanName(b.name)));
     return combined;
   }
 
   /**
-   * Save dataset
+   * Fetch and load a specific dataset on-demand
+   */
+  async getDataset(id) {
+    if (!id) return null;
+
+    if (this.cache.has(id) && this.cache.get(id).csvContent) {
+      return this.cache.get(id);
+    }
+
+    const datasets = await this.listDatasets();
+    let ds = datasets.find(d => d.id === id);
+    if (!ds) return null;
+
+    // If CSV content is already present
+    if (ds.csvContent) {
+      this.cache.set(id, ds);
+      return ds;
+    }
+
+    // If hosted on AWS/Azure, fetch the CSV file on-demand
+    if (ds.path) {
+      try {
+        const fileRes = await fetch(encodeURI(ds.path));
+        if (fileRes.ok) {
+          const csvContent = await fileRes.text();
+          const parseRes = AirlineCSVParser.parse(csvContent);
+          ds.csvContent = csvContent;
+          ds.rowCount = parseRes.routes.length;
+          this.cache.set(id, ds);
+          return ds;
+        }
+      } catch (err) {
+        console.error(`Failed to load CSV content for ${ds.name}:`, err);
+      }
+    }
+
+    return ds;
+  }
+
+  /**
+   * Loads unique market corridors across all available datasets (parallelized with caching & deduplication)
+   */
+  async getAllDatasetsRoutes() {
+    if (this._cachedAllRoutes && this._cachedAllRoutes.length > 0) {
+      return this._cachedAllRoutes;
+    }
+
+    const datasets = await this.listDatasets();
+    const marketMap = new Map(); // Canonical key: "A|B" sorted
+
+    const fetchPromises = datasets.map(async (dsInfo) => {
+      const fullDs = await this.getDataset(dsInfo.id);
+      if (fullDs && fullDs.csvContent) {
+        try {
+          const parsed = AirlineCSVParser.parse(fullDs.csvContent);
+          const shortName = fullDs.name.replace(/^PAX Data 2025-26\s*—\s*/i, '');
+          return {
+            id: fullDs.id,
+            shortName,
+            routes: parsed.routes
+          };
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    });
+
+    const results = await Promise.all(fetchPromises);
+    results.forEach(dsData => {
+      if (!dsData || !dsData.routes) return;
+      dsData.routes.forEach(r => {
+        const minCode = r.origin < r.destination ? r.origin : r.destination;
+        const maxCode = r.origin < r.destination ? r.destination : r.origin;
+        const canonicalKey = `${minCode}|${maxCode}`;
+
+        if (!marketMap.has(canonicalKey)) {
+          marketMap.set(canonicalKey, {
+            ...r,
+            canonicalKey,
+            sourceDatasetIds: [dsData.id],
+            sourceSheetsList: [dsData.shortName],
+            sourceDatasetName: dsData.shortName
+          });
+        } else {
+          // Corridor recorded in another regional sheet (e.g. intercontinental route between Europe and US)
+          const existing = marketMap.get(canonicalKey);
+          if (!existing.sourceDatasetIds.includes(dsData.id)) {
+            existing.sourceDatasetIds.push(dsData.id);
+            existing.sourceSheetsList.push(dsData.shortName);
+            existing.sourceDatasetName = existing.sourceSheetsList.join(', ');
+          }
+          // Preserve metrics (do not double sum as both sheets record the same two-way market)
+        }
+      });
+    });
+
+    const allRoutes = Array.from(marketMap.values());
+    this._cachedAllRoutes = allRoutes;
+    return allRoutes;
+  }
+
+  /**
+   * Save dataset (user upload)
    */
   async saveDataset(name, csvContent, isDefault = false, filename = '') {
     const parseResult = AirlineCSVParser.parse(csvContent);
     const cleanFilename = filename || (name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.csv');
-    const id = isDefault ? 'pacific-routes-2026' : (this.isServerActive ? 'disk-' + cleanFilename : 'ds-' + Date.now());
+    const id = isDefault ? 'pax-indian-subcon-2025-26' : (this.isServerActive ? 'disk-' + cleanFilename : 'ds-' + Date.now());
 
     const dataset = {
       id,
@@ -154,13 +267,8 @@ class DatasetStorage {
     }
 
     await this.saveToLocalDB(dataset);
+    this.cache.set(id, dataset);
     return dataset;
-  }
-
-  async getDataset(id) {
-    if (!id) return null;
-    const datasets = await this.listDatasets();
-    return datasets.find(d => d.id === id) || null;
   }
 
   async deleteDataset(id) {
@@ -179,12 +287,19 @@ class DatasetStorage {
 
     if (this.db) {
       await new Promise((resolve) => {
-        const tx = this.db.transaction(this.storeName, 'readwrite');
-        const store = tx.objectStore(this.storeName);
-        store.delete(id);
-        tx.oncomplete = () => resolve();
+        try {
+          const tx = this.db.transaction(this.storeName, 'readwrite');
+          const store = tx.objectStore(this.storeName);
+          store.delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch (e) {
+          resolve();
+        }
       });
     }
+
+    this.cache.delete(id);
 
     if (this.getActiveDatasetId() === id) {
       const remaining = await this.listDatasets();
@@ -197,7 +312,7 @@ class DatasetStorage {
   }
 
   getActiveDatasetId() {
-    return localStorage.getItem(this.activeDatasetIdKey) || 'pacific-routes-2026';
+    return localStorage.getItem(this.activeDatasetIdKey) || 'pax-indian-subcon-2025-26';
   }
 
   setActiveDatasetId(id) {
@@ -207,21 +322,30 @@ class DatasetStorage {
   async saveToLocalDB(dataset) {
     if (!this.db) return;
     return new Promise((resolve) => {
-      const tx = this.db.transaction(this.storeName, 'readwrite');
-      const store = tx.objectStore(this.storeName);
-      store.put(dataset);
-      tx.oncomplete = () => resolve();
+      try {
+        const tx = this.db.transaction(this.storeName, 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        store.put(dataset);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch (e) {
+        resolve();
+      }
     });
   }
 
   async listFromLocalDB() {
     if (!this.db) return [];
     return new Promise((resolve) => {
-      const tx = this.db.transaction(this.storeName, 'readonly');
-      const store = tx.objectStore(this.storeName);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
+      try {
+        const tx = this.db.transaction(this.storeName, 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
     });
   }
 }

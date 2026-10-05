@@ -1,0 +1,13 @@
+{
+  "name": "aerometrics",
+  "version": "1.0.0",
+  "description": "Modern Airline Network & Route Analytics",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo No build required",
+    "build:azure": "echo No build required"
+  },
+  "keywords": ["airline", "analytics", "aerometrics"],
+  "author": "",
+  "license": "ISC"
+}
